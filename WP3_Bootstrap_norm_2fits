@@ -1,0 +1,738 @@
+%%Clean the data
+clear all;
+close all;
+clc;
+
+%Folder %ADD DIRECTORY
+folder=cd('');
+
+
+% %Subjects %ADD SUBJECTNAMES
+name={''};
+
+%Participants excluded
+%
+
+
+%Fit parameters
+%Sigmoid
+eqsig = '1/(1+exp(-(x-x0)/b))';   % 2-parameter logistic (b, x0) %sigmoid equation for the fit taken from Serino et al. 2018
+
+%Linear with norm
+eqlin='b*x';
+%Linear no norm
+eqlin='a+b*x';
+
+%Parameters to change
+centralonly=0; %0 only stimuli from the central monster 1 all data 2 periph only
+cutoff=3; %cut off std value for outliers
+fig=1; %if you want the graph 
+howmanyboot=12001; 
+
+waitfit=0; %0 go on even if model does not fit 
+
+strings={'pre*.csv','tool*.csv','torso*.csv', 'whole*.csv'};
+
+
+
+%% Take the data from the excel, we only want the distance and rts column and which monster is shooting
+
+supsubdatapre=[];
+supsubdatatool=[];
+supsubdatatorso=[];
+supsubdatawhole=[];
+
+ %data pooled from all subjects
+for l=1:length(name)
+    
+    for g=1:length(strings)
+    
+    files=dir(strcat(name{l},strings{g}));
+    data=readtable(files.name,'VariableNamingRule', 'preserve'); 
+    if g==1
+    supsubdatapre=[supsubdatapre; data.Vibrate_distance, data.RT, data.Monster];
+    elseif g==2
+     supsubdatatool=[supsubdatatool; data.Vibrate_distance, data.RT, data.Monster];
+    elseif g==3
+     supsubdatatorso=[supsubdatatorso; data.Vibrate_distance, data.RT, data.Monster];
+    elseif g==4
+     supsubdatawhole=[supsubdatawhole; data.Vibrate_distance, data.RT, data.Monster];
+    end
+    
+    end
+    
+end
+
+ppsdata={supsubdatapre, supsubdatatool, supsubdatatorso, supsubdatawhole};
+dist=[0.25; 0.75; 1.25; 1.75; 2.25];
+
+%Clean data
+for k=1:length(strings)
+    
+%Take only trials from the central monster     
+if centralonly==0
+central_data=find(ppsdata{k}(:,3)==0);
+ppsdata{k}=ppsdata{k}(central_data,:);
+elseif centralonly==2
+central_data=find(ppsdata{k}(:,3)~=0);
+ppsdata{k}=ppsdata{k}(central_data,:);
+end
+
+catcht{k}=find(ppsdata{k}(:,1)==-1); %take out catch trials 
+ppsdata{k}(catcht{k},2:3)=NaN; %Put a NaN there 
+base{k}=find(ppsdata{k}(:,1)==0); %take out baseline trials
+ppsdata{k}(base{k},2:3)=NaN; %Put a NaN there 
+missed{k}=find(ppsdata{k}(:,2)<0.1); %take out any missed trial
+ppsdata{k}(missed{k},:)=NaN; %overwrite the matrix 
+long{k}=find(ppsdata{k}(:,2)>1); %take out trials longer than 1
+ppsdata{k}(long{k},:)=NaN; %overwrite the matrix 
+A{k}=isnan(ppsdata{k}(:,2));
+ppsdata{k}=ppsdata{k}(~A{k},:); %take out NaNs
+
+%Now we divide for each distance
+
+distance1=find(ppsdata{k}(:,1)==0.25);
+distance2=find(ppsdata{k}(:,1)==0.75);
+distance3=find(ppsdata{k}(:,1)==1.25);
+distance4=find(ppsdata{k}(:,1)==1.75);
+distance5=find(ppsdata{k}(:,1)==2.25);
+
+if k==1
+    
+    predist1=ppsdata{k}(distance1,:);
+    predist2=ppsdata{k}(distance2,:);
+    predist3=ppsdata{k}(distance3,:);
+    predist4=ppsdata{k}(distance4,:);
+    predist5=ppsdata{k}(distance5,:);
+
+elseif k==2
+    
+    tooldist1=ppsdata{k}(distance1,:);
+    tooldist2=ppsdata{k}(distance2,:);
+    tooldist3=ppsdata{k}(distance3,:);
+    tooldist4=ppsdata{k}(distance4,:);
+    tooldist5=ppsdata{k}(distance5,:);
+    
+elseif k==3
+    
+    torsodist1=ppsdata{k}(distance1,:);
+    torsodist2=ppsdata{k}(distance2,:);
+    torsodist3=ppsdata{k}(distance3,:);
+    torsodist4=ppsdata{k}(distance4,:);
+    torsodist5=ppsdata{k}(distance5,:);
+    
+elseif k==4
+    
+    wholedist1=ppsdata{k}(distance1,:);
+    wholedist2=ppsdata{k}(distance2,:);
+    wholedist3=ppsdata{k}(distance3,:);
+    wholedist4=ppsdata{k}(distance4,:);
+    wholedist5=ppsdata{k}(distance5,:);    
+end
+
+end
+
+%% Bootper pre
+
+k=1;
+
+while k<howmanyboot  
+
+    rng=(k); %seed del randi
+    
+%0.25
+    
+  indici1=randi(size(predist1,1),[(size(predist1,1)),1]); %scramble indeces of pre
+  scramble_pre1=predist1(indici1,:);
+  zeta=[]; 
+  zeta=abs((scramble_pre1(:,2)-mean(scramble_pre1(:,2)))/std(scramble_pre1(:,2)));
+  scramble_pre1(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_pre1(:,4)==0);
+  mytrials=scramble_pre1(trialskeep,2);
+  av_pre1=mean(mytrials);
+  std_pre1=std(mytrials);
+
+%0.75
+    
+  indici2=randi(size(predist2,1),[(size(predist2,1)),1]); %scramble indeces of pre
+  scramble_pre2=predist2(indici2,:);
+  zeta=[]; 
+  zeta=abs((scramble_pre2(:,2)-mean(scramble_pre2(:,2)))/std(scramble_pre2(:,2)));
+  scramble_pre2(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_pre2(:,4)==0);
+  mytrials=scramble_pre2(trialskeep,2);
+  av_pre2=mean(mytrials);
+  std_pre2=std(mytrials); 
+  
+%1.25
+    
+  indici3=randi(size(predist3,1),[(size(predist3,1)),1]); %scramble indeces of pre
+  scramble_pre3=predist3(indici3,:);
+  zeta=[]; 
+  zeta=abs((scramble_pre3(:,2)-mean(scramble_pre3(:,2)))/std(scramble_pre3(:,2)));
+  scramble_pre3(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_pre3(:,4)==0);
+  mytrials=scramble_pre3(trialskeep,2);
+  av_pre3=mean(mytrials);
+  std_pre3=std(mytrials); 
+  
+%1.75
+    
+  indici4=randi(size(predist4,1),[(size(predist4,1)),1]); %scramble indeces of pre
+  scramble_pre4=predist4(indici4,:);
+  zeta=[]; 
+  zeta=abs((scramble_pre4(:,2)-mean(scramble_pre4(:,2)))/std(scramble_pre4(:,2)));
+  scramble_pre4(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_pre4(:,4)==0);
+  mytrials=scramble_pre4(trialskeep,2);
+  av_pre4=mean(mytrials);
+  std_pre4=std(mytrials);   
+  
+%2.25
+    
+  indici5=randi(size(predist5,1),[(size(predist5,1)),1]); %scramble indeces of pre
+  scramble_pre5=predist5(indici5,:);
+  zeta=[]; 
+  zeta=abs((scramble_pre5(:,2)-mean(scramble_pre5(:,2)))/std(scramble_pre5(:,2)));
+  scramble_pre5(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_pre5(:,4)==0);
+  mytrials=scramble_pre5(trialskeep,2);
+  av_pre5=mean(mytrials);
+  std_pre5=std(mytrials);   
+
+av_pre_tot{k}=[av_pre1; av_pre2; av_pre3; av_pre4; av_pre5]; 
+
+% --- ADDED GUARD (division by zero in normalization) ---
+den_pre = max(av_pre_tot{k}) - min(av_pre_tot{k});
+if den_pre == 0
+    rsq_presig{k}=NaN;
+    pps_border_presig{k}=NaN;
+    continue
+end
+% ------------------------------------------------------
+
+for l=1:length(av_pre_tot{k})
+    norm_av_pre{k}(l)=(av_pre_tot{k}(l)-min(av_pre_tot{k}))/(max(av_pre_tot{k})-min(av_pre_tot{k}));
+end
+
+optpre = fitoptions(eqsig, ...
+    'Lower', [eps 0.25], ...
+    'Upper', [Inf 2.25], ...
+    'StartPoint', [0.5 1.25]);   % [b x0]
+
+try 
+    [fitobj_presig{k}, goodness_presig{k}, output_presig{k}, convmsg_presig{k}]=fit(dist,norm_av_pre{k}',eqsig,optpre);
+    rsq_presig{k}=goodness_presig{k}.rsquare;
+    pps_border_presig{k}=fitobj_presig{k}.x0;
+catch 
+    rsq_presig{k}=NaN;
+    pps_border_presig{k}=NaN;
+end
+
+if isnan(rsq_presig{k}) || rsq_presig{k}<0.8
+    k=k;
+else 
+    k=k+1;
+end
+
+k
+end 
+
+%% Boot tool 
+
+k=1;
+
+while k<howmanyboot  
+    
+    rng=(k); %seed del randi
+
+%0.25
+    
+  indici1=randi(size(tooldist1,1),[(size(tooldist1,1)),1]); %scramble indeces of tool
+  scramble_tool1=tooldist1(indici1,:);
+  zeta=[]; 
+  zeta=abs((scramble_tool1(:,2)-mean(scramble_tool1(:,2)))/std(scramble_tool1(:,2)));
+  scramble_tool1(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_tool1(:,4)==0);
+  mytrials=scramble_tool1(trialskeep,2);
+  av_tool1=mean(mytrials);
+  std_tool1=std(mytrials);
+
+%0.75
+    
+  indici2=randi(size(tooldist2,1),[(size(tooldist2,1)),1]); %scramble indeces of tool
+  scramble_tool2=tooldist2(indici2,:);
+  zeta=[]; 
+  zeta=abs((scramble_tool2(:,2)-mean(scramble_tool2(:,2)))/std(scramble_tool2(:,2)));
+  scramble_tool2(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_tool2(:,4)==0);
+  mytrials=scramble_tool2(trialskeep,2);
+  av_tool2=mean(mytrials);
+  std_tool2=std(mytrials); 
+  
+%1.25
+    
+  indici3=randi(size(tooldist3,1),[(size(tooldist3,1)),1]); %scramble indeces of tool
+  scramble_tool3=tooldist3(indici3,:);
+  zeta=[]; 
+  zeta=abs((scramble_tool3(:,2)-mean(scramble_tool3(:,2)))/std(scramble_tool3(:,2)));
+  scramble_tool3(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_tool3(:,4)==0);
+  mytrials=scramble_tool3(trialskeep,2);
+  av_tool3=mean(mytrials);
+  std_tool3=std(mytrials); 
+  
+%1.75
+    
+  indici4=randi(size(tooldist4,1),[(size(tooldist4,1)),1]); %scramble indeces of tool
+  scramble_tool4=tooldist4(indici4,:);
+  zeta=[]; 
+  zeta=abs((scramble_tool4(:,2)-mean(scramble_tool4(:,2)))/std(scramble_tool4(:,2)));
+  scramble_tool4(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_tool4(:,4)==0);
+  mytrials=scramble_tool4(trialskeep,2);
+  av_tool4=mean(mytrials);
+  std_tool4=std(mytrials);   
+  
+%2.25
+    
+  indici5=randi(size(tooldist5,1),[(size(tooldist5,1)),1]); %scramble indeces of tool
+  scramble_tool5=tooldist5(indici5,:);
+  zeta=[]; 
+  zeta=abs((scramble_tool5(:,2)-mean(scramble_tool5(:,2)))/std(scramble_tool5(:,2)));
+  scramble_tool5(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_tool5(:,4)==0);
+  mytrials=scramble_tool5(trialskeep,2);
+  av_tool5=mean(mytrials);
+  std_tool5=std(mytrials);   
+
+av_tool_tot{k}=[av_tool1; av_tool2; av_tool3; av_tool4; av_tool5]; 
+
+% --- ADDED GUARD (division by zero in normalization) ---
+den_tool = max(av_tool_tot{k}) - min(av_tool_tot{k});
+if den_tool == 0
+    rsq_toolsig{k}=NaN;
+    pps_border_toolsig{k}=NaN;
+    continue
+end
+% ------------------------------------------------------
+
+for l=1:length(av_tool_tot{k})
+    norm_av_tool{k}(l)=(av_tool_tot{k}(l)-min(av_tool_tot{k}))/(max(av_tool_tot{k})-min(av_tool_tot{k}));
+end
+
+opttool = fitoptions(eqsig, ...
+    'Lower', [eps 0.25], ...
+    'Upper', [Inf 2.25], ...
+    'StartPoint', [0.5 1.25]);   % [b x0]
+
+try 
+    [fitobj_toolsig{k}, goodness_toolsig{k}, output_toolsig{k}, convmsg_toolsig{k}]=fit(dist,norm_av_tool{k}',eqsig,opttool);
+    rsq_toolsig{k}=goodness_toolsig{k}.rsquare;
+    pps_border_toolsig{k}=fitobj_toolsig{k}.x0;
+catch 
+    rsq_toolsig{k}=NaN;
+    pps_border_toolsig{k}=NaN;
+end
+
+if isnan(rsq_toolsig{k}) || rsq_toolsig{k}<0.8
+    k=k;
+else 
+    k=k+1;
+end
+
+k
+end 
+
+%% Boot torso
+k=1;
+
+while k<howmanyboot  
+    
+  rng=(k); %seed del randi
+
+%0.25
+    
+  indici1=randi(size(torsodist1,1),[(size(torsodist1,1)),1]); %scramble indeces of torso
+  scramble_torso1=torsodist1(indici1,:);
+  zeta=[]; 
+  zeta=abs((scramble_torso1(:,2)-mean(scramble_torso1(:,2)))/std(scramble_torso1(:,2)));
+  scramble_torso1(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_torso1(:,4)==0);
+  mytrials=scramble_torso1(trialskeep,2);
+  av_torso1=mean(mytrials);
+  std_torso1=std(mytrials);
+
+%0.75
+    
+  indici2=randi(size(torsodist2,1),[(size(torsodist2,1)),1]); %scramble indeces of torso
+  scramble_torso2=torsodist2(indici2,:);
+  zeta=[]; 
+  zeta=abs((scramble_torso2(:,2)-mean(scramble_torso2(:,2)))/std(scramble_torso2(:,2)));
+  scramble_torso2(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_torso2(:,4)==0);
+  mytrials=scramble_torso2(trialskeep,2);
+  av_torso2=mean(mytrials);
+  std_torso2=std(mytrials); 
+  
+%1.25
+    
+  indici3=randi(size(torsodist3,1),[(size(torsodist3,1)),1]); %scramble indeces of torso
+  scramble_torso3=torsodist3(indici3,:);
+  zeta=[]; 
+  zeta=abs((scramble_torso3(:,2)-mean(scramble_torso3(:,2)))/std(scramble_torso3(:,2)));
+  scramble_torso3(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_torso3(:,4)==0);
+  mytrials=scramble_torso3(trialskeep,2);
+  av_torso3=mean(mytrials);
+  std_torso3=std(mytrials); 
+  
+%1.75
+    
+  indici4=randi(size(torsodist4,1),[(size(torsodist4,1)),1]); %scramble indeces of torso
+  scramble_torso4=torsodist4(indici4,:);
+  zeta=[]; 
+  zeta=abs((scramble_torso4(:,2)-mean(scramble_torso4(:,2)))/std(scramble_torso4(:,2)));
+  scramble_torso4(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_torso4(:,4)==0);
+  mytrials=scramble_torso4(trialskeep,2);
+  av_torso4=mean(mytrials);
+  std_torso4=std(mytrials);   
+  
+%2.25
+    
+  indici5=randi(size(torsodist5,1),[(size(torsodist5,1)),1]); %scramble indeces of torso
+  scramble_torso5=torsodist5(indici5,:);
+  zeta=[]; 
+  zeta=abs((scramble_torso5(:,2)-mean(scramble_torso5(:,2)))/std(scramble_torso5(:,2)));
+  scramble_torso5(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_torso5(:,4)==0);
+  mytrials=scramble_torso5(trialskeep,2);
+  av_torso5=mean(mytrials);
+  std_torso5=std(mytrials);   
+
+av_torso_tot{k}=[av_torso1; av_torso2; av_torso3; av_torso4; av_torso5]; 
+
+% --- ADDED GUARD (division by zero in normalization) ---
+den_torso = max(av_torso_tot{k}) - min(av_torso_tot{k});
+if den_torso == 0
+    rsq_torsosig{k}=NaN;
+    pps_border_torsosig{k}=NaN;
+    continue
+end
+% ------------------------------------------------------
+
+for l=1:length(av_torso_tot{k})
+    norm_av_torso{k}(l)=(av_torso_tot{k}(l)-min(av_torso_tot{k}))/(max(av_torso_tot{k})-min(av_torso_tot{k}));
+end
+
+opttorso = fitoptions(eqsig, ...
+    'Lower', [eps 0.25], ...
+    'Upper', [Inf 2.25], ...
+    'StartPoint', [0.5 1.25]);   % [b x0]
+
+
+try 
+    [fitobj_torsosig{k}, goodness_torsosig{k}, output_torsosig{k}, convmsg_torsosig{k}]=fit(dist,norm_av_torso{k}',eqsig,opttorso);
+    rsq_torsosig{k}=goodness_torsosig{k}.rsquare;
+    pps_border_torsosig{k}=fitobj_torsosig{k}.x0;
+catch 
+    rsq_torsosig{k}=NaN;
+    pps_border_torsosig{k}=NaN;
+end
+
+if isnan(rsq_torsosig{k}) || rsq_torsosig{k}<0.8
+    k=k;
+else 
+    k=k+1;
+end
+
+k
+end 
+
+%% Boot whole
+k=1;
+
+while k<howmanyboot  
+    
+  rng=(k); %seed del randi
+
+%0.25
+    
+  indici1=randi(size(wholedist1,1),[(size(wholedist1,1)),1]); %scramble indeces of whole
+  scramble_whole1=wholedist1(indici1,:);
+  zeta=[]; 
+  zeta=abs((scramble_whole1(:,2)-mean(scramble_whole1(:,2)))/std(scramble_whole1(:,2)));
+  scramble_whole1(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_whole1(:,4)==0);
+  mytrials=scramble_whole1(trialskeep,2);
+  av_whole1=mean(mytrials);
+  std_whole1=std(mytrials);
+
+%0.75
+    
+  indici2=randi(size(wholedist2,1),[(size(wholedist2,1)),1]); %scramble indeces of whole
+  scramble_whole2=wholedist2(indici2,:);
+  zeta=[]; 
+  zeta=abs((scramble_whole2(:,2)-mean(scramble_whole2(:,2)))/std(scramble_whole2(:,2)));
+  scramble_whole2(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_whole2(:,4)==0);
+  mytrials=scramble_whole2(trialskeep,2);
+  av_whole2=mean(mytrials);
+  std_whole2=std(mytrials); 
+  
+%1.25
+    
+  indici3=randi(size(wholedist3,1),[(size(wholedist3,1)),1]); %scramble indeces of whole
+  scramble_whole3=wholedist3(indici3,:);
+  zeta=[]; 
+  zeta=abs((scramble_whole3(:,2)-mean(scramble_whole3(:,2)))/std(scramble_whole3(:,2)));
+  scramble_whole3(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_whole3(:,4)==0);
+  mytrials=scramble_whole3(trialskeep,2);
+  av_whole3=mean(mytrials);
+  std_whole3=std(mytrials); 
+  
+%1.75
+    
+  indici4=randi(size(wholedist4,1),[(size(wholedist4,1)),1]); %scramble indeces of whole
+  scramble_whole4=wholedist4(indici4,:);
+  zeta=[]; 
+  zeta=abs((scramble_whole4(:,2)-mean(scramble_whole4(:,2)))/std(scramble_whole4(:,2)));
+  scramble_whole4(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_whole4(:,4)==0);
+  mytrials=scramble_whole4(trialskeep,2);
+  av_whole4=mean(mytrials);
+  std_whole4=std(mytrials);   
+  
+%2.25
+    
+  indici5=randi(size(wholedist5,1),[(size(wholedist5,1)),1]); %scramble indeces of whole
+  scramble_whole5=wholedist5(indici5,:);
+  zeta=[]; 
+  zeta=abs((scramble_whole5(:,2)-mean(scramble_whole5(:,2)))/std(scramble_whole5(:,2)));
+  scramble_whole5(:,4)=zeta>=cutoff; %writes 1 on the trials to discard 
+  trialskeep=find(scramble_whole5(:,4)==0);
+  mytrials=scramble_whole5(trialskeep,2);
+  av_whole5=mean(mytrials);
+  std_whole5=std(mytrials);   
+
+av_whole_tot{k}=[av_whole1; av_whole2; av_whole3; av_whole4; av_whole5]; 
+
+% --- ADDED GUARD (division by zero in normalization) ---
+den_whole = max(av_whole_tot{k}) - min(av_whole_tot{k});
+if den_whole == 0
+    rsq_wholesig{k}=NaN;
+    pps_border_wholesig{k}=NaN;
+    continue
+end
+% ------------------------------------------------------
+
+for l=1:length(av_whole_tot{k})
+    norm_av_whole{k}(l)=(av_whole_tot{k}(l)-min(av_whole_tot{k}))/(max(av_whole_tot{k})-min(av_whole_tot{k}));
+end
+
+optwhole = fitoptions(eqsig, ...
+    'Lower', [eps 0.25], ...
+    'Upper', [Inf 2.25], ...
+    'StartPoint', [0.5 1.25]);   % [b x0]
+
+try 
+    [fitobj_wholesig{k}, goodness_wholesig{k}, output_wholesig{k}, convmsg_wholesig{k}]=fit(dist,norm_av_whole{k}',eqsig,optwhole);
+    rsq_wholesig{k}=goodness_wholesig{k}.rsquare;
+    pps_border_wholesig{k}=fitobj_wholesig{k}.x0;
+catch 
+    rsq_wholesig{k}=NaN;
+    pps_border_wholesig{k}=NaN;
+end
+
+if isnan(rsq_wholesig{k}) || rsq_wholesig{k}<0.8
+    k=k;
+else 
+    k=k+1;
+end
+
+k
+end 
+
+%% Save everything
+
+%Pre Sigmoidal 
+   BootAvPre=[av_pre_tot{:}];
+   BootBorderSigPre=[pps_border_presig{:}];
+   BootRsqSigPre=[rsq_presig{:}];  
+   
+   NomeMatPreBootAv=strcat('BootAvPre');    
+   NomeMatPreBootBorderSig=strcat('BootBorderSigPre');     
+   NomeMatPreBootRsqSig=strcat('BootRsqSigPre');
+   
+   save(NomeMatPreBootAv,'BootAvPre');
+   save(NomeMatPreBootBorderSig,'BootBorderSigPre');
+   save(NomeMatPreBootRsqSig,'BootRsqSigPre');
+
+%Tool Sigmoidal   
+   BootRsqSigTool=[rsq_toolsig{:}];   
+   BootAvTool=[av_tool_tot{:}];
+   BootBorderSigTool = [pps_border_toolsig{:}];
+
+   NomeMatToolBootBorderSig=strcat('BootBorderSigTool');        
+   NomeMatToolBootAv=strcat('BootAvTool');    
+   NomeMatToolBootRsqSig=strcat('BootRsqSigTool');  
+   
+   save(NomeMatToolBootAv,'BootAvTool');
+   save(NomeMatToolBootRsqSig,'BootRsqSigTool');  
+   save(NomeMatToolBootBorderSig,'BootBorderSigTool');
+
+%Torso Sigmoidal
+   BootAvTorso=[av_torso_tot{:}];
+   BootBorderSigTorso=[pps_border_torsosig{:}];
+   BootRsqSigTorso = [rsq_torsosig{:}];
+   
+   NomeMatTorsoBootAv=strcat('BootAvTorso');    
+   NomeMatTorsoBootBorderSig=strcat('BootBorderSigTorso');  
+   NomeMatTorsoBootRsqSig=strcat('BootRsqSigTorso');   
+   
+   save(NomeMatTorsoBootAv,'BootAvTorso');
+   save(NomeMatTorsoBootBorderSig,'BootBorderSigTorso');   
+   save(NomeMatTorsoBootRsqSig,'BootRsqSigTorso');
+
+%Whole Sigmoidal
+   BootAvWhole=[av_whole_tot{:}];
+   BootBorderSigWhole=[pps_border_wholesig{:}];
+   BootRsqSigWhole=[rsq_wholesig{:}];
+   
+   NomeMatWholeBootAv=strcat('BootAvWhole');    
+   NomeMatWholeBootBorderSig=strcat('BootBorderSigWhole');  
+   NomeMatWholeBootRsqSig=strcat('BootRsqSigWhole');   
+   
+   save(NomeMatWholeBootAv,'BootAvWhole');
+   save(NomeMatWholeBootBorderSig,'BootBorderSigWhole');   
+   save(NomeMatWholeBootRsqSig,'BootRsqSigWhole');
+
+%%
+%% -------------------- ONE-SIDED P-VALUES (FROM BOOTSTRAP BORDERS) --------------------
+% Define diffs as (COND - PRE). Directional hypothesis: COND > PRE
+% One-sided p-value = P(diff <= 0) = mean(diff <= 0)
+
+N = min([numel(BootBorderSigPre), numel(BootBorderSigTool), ...
+         numel(BootBorderSigTorso), numel(BootBorderSigWhole)]);
+
+diffPT = BootBorderSigTool(1:N)  - BootBorderSigPre(1:N);   % TOOL - PRE
+diffTR = BootBorderSigTorso(1:N) - BootBorderSigPre(1:N);   % TORSO - PRE
+diffWH = BootBorderSigWhole(1:N) - BootBorderSigPre(1:N);   % WHOLE - PRE
+
+p_tool_gt_pre  = mean(diffPT <= 0);
+p_torso_gt_pre = mean(diffTR <= 0);
+p_whole_gt_pre = mean(diffWH <= 0);
+
+fprintf('\n--- ONE-SIDED p-values (COND > PRE) ---\n');
+fprintf('ONE-SIDED p (TOOL  > PRE) = %.5f (N=%d)\n', p_tool_gt_pre,  N);
+fprintf('ONE-SIDED p (TORSO > PRE) = %.5f (N=%d)\n', p_torso_gt_pre, N);
+fprintf('ONE-SIDED p (WHOLE > PRE) = %.5f (N=%d)\n', p_whole_gt_pre, N);
+
+% Optional (if you also want the reverse-direction one-sided p-values):
+p_pre_gt_tool  = mean(diffPT >= 0);
+p_pre_gt_torso = mean(diffTR >= 0);
+p_pre_gt_whole = mean(diffWH >= 0);
+
+fprintf('\n--- ONE-SIDED p-values (PRE > COND) [optional] ---\n');
+fprintf('ONE-SIDED p (PRE > TOOL)  = %.5f (N=%d)\n', p_pre_gt_tool,  N);
+fprintf('ONE-SIDED p (PRE > TORSO) = %.5f (N=%d)\n', p_pre_gt_torso, N);
+fprintf('ONE-SIDED p (PRE > WHOLE) = %.5f (N=%d)\n', p_pre_gt_whole, N);
+
+   
+   %% 
+
+if fig==1
+
+    figure(1); clf; hold on
+
+    % Use the real x-range of your data
+    xx = linspace(min(dist), max(dist), 400);
+
+    % Plot fitted curves (evaluate fit explicitly)
+   % COLOR LEGEND:
+% PRE   = black
+% TOOL  = red
+% TORSO = blue
+% WHOLE = green
+
+plot(xx, feval(fitobj_presig{1},  xx), 'k', 'LineWidth', 3); % PRE
+plot(xx, feval(fitobj_toolsig{1}, xx), 'r', 'LineWidth', 3); % TOOL
+plot(xx, feval(fitobj_torsosig{1},xx), 'b', 'LineWidth', 3); % TORSO
+plot(xx, feval(fitobj_wholesig{1},xx), 'g', 'LineWidth', 3); % WHOLE
+
+xline(pps_border_presig{1},  'k', 'LineWidth', 2);
+xline(pps_border_toolsig{1}, 'r', 'LineWidth', 2);
+xline(pps_border_torsosig{1},'b', 'LineWidth', 2);
+xline(pps_border_wholesig{1},'g', 'LineWidth', 2);
+
+legend({'PRE (black)','TOOL (red)','TORSO (blue)','WHOLE (green)'}, 'Location','SouthEast');
+
+end
+
+
+%Sigmoidal fit
+figure(2)
+histogram(BootBorderSigPre, 'FaceColor', 'r'); hold on
+histogram(BootBorderSigTool, 'FaceColor', 'b'); 
+ylim([0 1000]);
+xlim([0.8 2]);
+set(gca,'FontSize',20);
+xlabel('PPS Border (m)');
+ylabel('Frequency');
+set(gca, 'LineWidth',3);
+set(gca,'TickLength',[0.03, 0.01]); 
+set(gcf,'Color','w'); 
+set(gca,'Color','w', 'xColor', 'k', 'YColor', 'k');
+pbaspect([1 1 1]);
+box off
+set(gca,'TickDir','out');
+legend off
+% Statistics
+ howmanytimes=sum(BootBorderSigPre>BootBorderSigTool);
+ p1=((12000-howmanytimes)/12000);
+
+%Sigmoidal fit
+figure(3)
+histogram(BootBorderSigPre,   'FaceColor','r'); hold on
+histogram(BootBorderSigTorso, 'FaceColor','g');
+ylim([0 1000]);
+xlim([0.8 2]);
+set(gca,'FontSize',20);
+xlabel('PPS Border (m)');
+ylabel('Frequency');
+set(gca,'LineWidth',3);
+set(gca,'TickLength',[0.03 0.01]);
+set(gcf,'Color','w');
+set(gca,'Color','w','xColor','k','YColor','k');
+pbaspect([1 1 1]);
+box off
+set(gca,'TickDir','out');
+legend('PRE','TORSO','Location','best')
+% Statistics
+ howmanytimes=sum(BootBorderSigPre>BootBorderSigTorso);
+ p2=((12000-howmanytimes)/12000);
+
+%Sigmoidal fit
+figure(4)
+histogram(BootBorderSigPre,   'FaceColor','r'); hold on
+histogram(BootBorderSigWhole, 'FaceColor','m');
+ylim([0 1000]);
+xlim([0.8 2]);
+set(gca,'FontSize',20);
+xlabel('PPS Border (m)');
+ylabel('Frequency');
+set(gca,'LineWidth',3);
+set(gca,'TickLength',[0.03 0.01]);
+set(gcf,'Color','w');
+set(gca,'Color','w','xColor','k','YColor','k');
+pbaspect([1 1 1]);
+box off
+set(gca,'TickDir','out');
+legend('PRE','WHOLE','Location','best')
+% Statistics
+ howmanytimes=sum(BootBorderSigPre>BootBorderSigWhole);
+ p3=((12000-howmanytimes)/12000);
+
+x=[0.25 0.75 1.25 1.75 2.25];
